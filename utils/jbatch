@@ -1,0 +1,50 @@
+#!/bin/bash
+# prepend Slurm directives to a job script and submit it to the queue
+
+set -euo pipefail
+
+# parse args
+
+
+# --test -> --test-only
+# -v, -v -v, -v -v -v
+# %x - job name
+# SLURM_MEM_PER_NODE = --mem
+# SLURM_NTASKS / SLURM_NPROCS = --ntasks
+# SLURM_NTASKS_PER_NODE
+
+# automatically set some directives for prepending
+jobscript_path="$1"
+[[ -f jobscript_path ]] || { >&2 echo 'jobscript not found - check path'; exit 1; }
+jobscript_name="${jobscript_path##*/}"
+jobname="${jobscript_name%.*}"
+
+directives="#!/bin/bash
+
+#SBATCH -J ${jobname}_%j
+#SBATCH -p general
+#SBATCH -o ${jobname}_%j.stdout.log
+#SBATCH -e ${jobname}_%j.stderr.log
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=${USER}@iu.edu
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=12
+#SBATCH --mem 32G
+#SBATCH --time=12:00:00
+#SBATCH --time-min=8:00:00
+#SBATCH --export=ALL
+
+>&2 echo '-' # stops sbatch from processing further directives
+"
+
+cat <(echo "$directives") "$jobscript_path" > "${jobscript_path}.sbatch"
+
+>&2 echo
+>&2 echo 'directives prepended to job script and written to:'
+>&2 echo "    ${jobscript_path}.sbatch"
+>&2 echo 'submitting job to queue...'
+>&2 echo
+
+sbatch --ignore-pbs "${jobscript_path}.sbatch"
+
+exit
