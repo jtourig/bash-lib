@@ -1,0 +1,44 @@
+#!/bin/bash
+# starts a Slurm interactive job on carbonate
+# max allocation: 24 cpu / ntasks-per-node, 251G memory, 8 hours;
+# though, I don't know if full access is really granted to a whole compute node's resources
+# 	for the sake of an interactive job...
+
+set -e
+
+usage="
+	usage: ${0##*/} [resource level]
+
+	starts a Slurm interactive job on carbonate with the requested [resource level]:
+	
+	low 	= 8  tasks/CPUs,  32GB memory  	(e.g. yeast) (default)
+	med 	= 10 tasks/CPUs,  64GB memory 	(e.g. human data)
+	half	= 12 tasks/CPUs, 128GB memory	(half a node)
+	high 	= 16 tasks/CPUs, 192GB memory	(3/4 of a node)
+	node 	= 24 tasks/CPUS, 251GB memory	(a whole compute node)
+
+	all interactive jobs are limited to 8 hours wall time
+
+	example:
+	\$ ${0##*/} med
+"
+# print some help
+[[ $1 == '-h' || $1 == '--help' ]] && { >&2 echo "$usage"; exit 1; }
+
+# parse the arg
+case $1 in
+	low|lo|'') cpu=8; mem=32G ;;
+	med) cpu=10; mem=64G ;;
+	half) cpu=12; mem=128G ;;
+	high|hi) cpu=16; mem=192G ;;
+	node) cpu=24; mem=251G ;;
+	*)
+		>&2 echo -e "\nOption not recognized:  $1"
+		>&2 echo "$usage"
+		exit 1
+esac
+
+>&2 echo -e "\n  requesting an interactive job with $cpu CPUs and $mem memory...\n"
+srun -p interactive -N 1 --ntasks-per-node="$cpu" --mem="$mem" --time=8:00:00 --pty bash
+
+exit
