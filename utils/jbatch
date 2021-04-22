@@ -1,0 +1,67 @@
+#!/bin/bash
+# prepend Slurm directives to a job script and submit it to the general queue
+
+set -e
+
+scriptname="${0##*/}"
+usage="
+	usage: $scriptname [sbatch args (optional)] [path/to/jobscript]
+
+	Automatically set and prepend sane Slurm directives to your job script and submit it to the general queue
+
+	[/path/to/jobscript] MUST be final argument
+
+	Also writes a copy of the prepended script suffixed with *.sbatch to the current dir
+	(can be resubmitted with sbatch)
+
+	Default resources requested are:
+	1 node, 12 tasks/CPUs, 128GB memory, 12 hours
+	(half a general carbonate compute node)
+
+	You can override these directives with standard sbatch options:
+		--ntasks-per-node
+		--mem
+		--time
+		and so forth (see sbatch --help for a list)
+
+	Examples:
+		$ jbatch your_processing_script.sh
+		$ jbatch --ntasks-per-node=8 --mem=16G --time=6:00:00 my_small_job.sh
+"
+
+[[ -z $1 || $1 == '-h' || $1 == '--help' ]] && { >&2 echo "$usage"; exit 1; }
+
+# automatically set directives for prepending
+jobscript_path="${@: -1}"
+[[ -f $jobscript_path ]] || { >&2 echo 'jobscript not found - check path'; exit 1; }
+jobscript_name="${jobscript_path##*/}"
+jobname="${jobscript_name%.*}"
+
+directives="#!/bin/bash
+
+#SBATCH -J ${jobname}_$(date +%Y-%m-%d_%a_%T)
+#SBATCH -p general
+#SBATCH -o %x_%j.stdout.log
+#SBATCH -e %x_%j.stderr.log
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=${USER}@iu.edu
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=12
+#SBATCH --mem 128G
+#SBATCH --time=12:00:00
+#SBATCH --export=ALL
+
+echo > /dev/null # stops sbatch from processing further directives
+"
+
+# prepend directives and save a copy
+cat <(echo "$directives") "$jobscript_path" > "${jobscript_path}.sbatch"
+
+>&2 echo -e '\n  directives prepended to job script and written to:'
+>&2 echo "    ${jobscript_path}.sbatch"
+>&2 echo -e '\n  submitting job to queue...\n'
+
+# submit prepended job to queue, along with any sbatch overrides
+sbatch --ignore-pbs "$@".sbatch
+
+exit
